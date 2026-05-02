@@ -1,30 +1,41 @@
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Mic, Shield, Monitor, Zap, CheckCircle2, 
-  ArrowRight, PlayCircle, Globe, Lock, Cpu
+  ArrowRight, PlayCircle, Globe, Lock, Cpu, X
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase } from './lib/supabase';
-import { useEffect } from 'react';
+import { api } from './lib/api';
+import { useEffect, useState } from 'react';
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) navigate('/dashboard');
-    });
+    api.auth.me()
+      .then(() => navigate('/dashboard'))
+      .catch(() => {});
   }, []);
 
-  const handleGoogleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin + '/#/dashboard'
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    try {
+      if (authMode === 'login') {
+        await api.auth.login({ email, password });
+      } else {
+        await api.auth.register({ email, password });
       }
-    });
-    if (error) console.error('Error logging in:', error.message);
+      navigate('/dashboard');
+    } catch (err: any) {
+      setError(err.message);
+    }
   };
+
   return (
     <div className="min-h-screen bg-background text-slate-900 font-sans">
       
@@ -44,8 +55,8 @@ export default function LandingPage() {
           </div>
           
           <div className="flex items-center space-x-4">
-            <button onClick={handleGoogleLogin} className="text-sm font-medium text-slate-600 hover:text-primary transition-colors">Sign In</button>
-            <button onClick={handleGoogleLogin} className="bg-primary hover:bg-primary-dark text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm">
+            <button onClick={() => { setAuthMode('login'); setShowAuth(true); }} className="text-sm font-medium text-slate-600 hover:text-primary transition-colors">Sign In</button>
+            <button onClick={() => { setAuthMode('register'); setShowAuth(true); }} className="bg-primary hover:bg-primary-dark text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm">
               Get Started
             </button>
           </div>
@@ -71,7 +82,7 @@ export default function LandingPage() {
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4">
-            <button onClick={handleGoogleLogin} className="w-full sm:w-auto bg-primary text-white hover:bg-primary-dark px-8 py-4 rounded-xl font-bold text-lg transition-all shadow-md">
+            <button onClick={() => { setAuthMode('register'); setShowAuth(true); }} className="w-full sm:w-auto bg-primary text-white hover:bg-primary-dark px-8 py-4 rounded-xl font-bold text-lg transition-all shadow-md">
               Start Free Trial
             </button>
             <button className="w-full sm:w-auto bg-white border border-border text-slate-700 hover:bg-slate-50 px-8 py-4 rounded-xl font-bold text-lg transition-all">
@@ -89,6 +100,73 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* Auth Modal */}
+      <AnimatePresence>
+        {showAuth && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAuth(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 border border-border"
+            >
+              <button onClick={() => setShowAuth(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+              <h2 className="text-2xl font-bold text-slate-900 mb-2">{authMode === 'login' ? 'Welcome Back' : 'Create Account'}</h2>
+              <p className="text-slate-500 text-sm mb-6">{authMode === 'login' ? 'Sign in to access your dashboard' : 'Start your 10-minute free trial today'}</p>
+
+              {error && <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 text-xs rounded-lg">{error}</div>}
+
+              <form onSubmit={handleAuth} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Email Address</label>
+                  <input 
+                    type="email" 
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full bg-slate-50 border border-border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    placeholder="name@company.com"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Password</label>
+                  <input 
+                    type="password" 
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-slate-50 border border-border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    placeholder="••••••••"
+                  />
+                </div>
+                <button type="submit" className="w-full bg-primary hover:bg-primary-dark text-white py-3 rounded-lg font-bold transition-colors shadow-lg shadow-primary/20">
+                  {authMode === 'login' ? 'Sign In' : 'Create Account'}
+                </button>
+              </form>
+
+              <p className="mt-6 text-center text-sm text-slate-500">
+                {authMode === 'login' ? "Don't have an account? " : "Already have an account? "}
+                <button 
+                  onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}
+                  className="text-primary font-bold hover:underline"
+                >
+                  {authMode === 'login' ? 'Sign Up' : 'Log In'}
+                </button>
+              </p>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Features Section */}
       <section id="features" className="py-24 bg-slate-50 px-6">
@@ -169,9 +247,9 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              <Link to="/dashboard" className="w-full py-3 bg-slate-50 hover:bg-slate-100 border border-border rounded-lg font-bold text-slate-700 transition-colors text-center">
+              <button onClick={() => { setAuthMode('register'); setShowAuth(true); }} className="w-full py-3 bg-slate-50 hover:bg-slate-100 border border-border rounded-lg font-bold text-slate-700 transition-colors text-center">
                 Try Free
-              </Link>
+              </button>
             </div>
 
             {/* Pro Plan */}
@@ -192,9 +270,9 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              <Link to="/dashboard" className="w-full py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-bold transition-colors text-center shadow-lg shadow-primary/20">
+              <button onClick={() => { setAuthMode('register'); setShowAuth(true); }} className="w-full py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-bold transition-colors text-center shadow-lg shadow-primary/20">
                 Upgrade Now
-              </Link>
+              </button>
             </div>
 
             {/* Credits Plan */}
@@ -212,9 +290,9 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              <Link to="/dashboard" className="w-full py-3 bg-slate-50 hover:bg-slate-100 border border-border rounded-lg font-bold text-slate-700 transition-colors text-center">
+              <button onClick={() => { setAuthMode('register'); setShowAuth(true); }} className="w-full py-3 bg-slate-50 hover:bg-slate-100 border border-border rounded-lg font-bold text-slate-700 transition-colors text-center">
                 Buy Pack
-              </Link>
+              </button>
             </div>
           </div>
         </div>
@@ -243,3 +321,4 @@ export default function LandingPage() {
     </div>
   );
 }
+

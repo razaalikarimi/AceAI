@@ -6,7 +6,7 @@ import {
   Mic, Zap
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
@@ -22,58 +22,40 @@ export default function Dashboard() {
   }, []);
 
   async function checkUser() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    try {
+      const data = await api.auth.me();
+      setUser(data.user);
+      fetchData();
+    } catch (err) {
       navigate('/');
-      return;
     }
-    setUser(user);
-    fetchData(user.id);
   }
 
-  async function fetchData(userId: string) {
+  async function fetchData() {
     setLoading(true);
-    
-    // Fetch Profile (Credits)
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    
-    if (profileData) setProfile(profileData);
+    try {
+      const profileData = await api.user.getCredits();
+      if (profileData) setProfile(profileData);
 
-    // Fetch Sessions
-    const { data: sessionData } = await supabase
-      .from('sessions')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-    
-    if (sessionData) setSessions(sessionData);
-
+      const sessionData = await api.sessions.list();
+      if (sessionData) setSessions(sessionData);
+    } catch (err) {
+      console.error('Failed to fetch data:', err);
+    }
     setLoading(false);
   }
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
+  const handleSignOut = () => {
+    api.auth.logout();
     navigate('/');
   };
 
   const handleBuyCredits = async (planId: string) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-
     try {
-      const response = await fetch('http://localhost:5000/api/payments/create-checkout-session', {
+      const data = await api.request('/payments/create-checkout-session', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
         body: JSON.stringify({ planId })
       });
-      const data = await response.json();
       if (data.url) window.location.href = data.url;
     } catch (err) {
       console.error('Payment failed:', err);
